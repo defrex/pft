@@ -12,8 +12,8 @@ const path = require('path')
 const moment = require('moment')
 const express = require('express')
 const bodyParser = require('body-parser')
-const client = require('../lib/plaidClient')
-const saveEnv = require('./saveEnv')
+const { plaid } = require('../lib/plaid')
+const { saveToEnv } = require('../lib/saveToEnv')
 
 const app = express()
 app.use(express.static(path.resolve(__dirname)))
@@ -39,7 +39,7 @@ let ITEM_ID = null
 function saveAccessToken(token) {
   console.log()
   console.log(`Saving access token for account "${account}": ${token}`)
-  saveEnv({
+  saveToEnv({
     [`PLAID_TOKEN_${account}`]: token,
   })
   console.log('Saved.')
@@ -51,7 +51,7 @@ function saveAccessToken(token) {
 // https://plaid.com/docs/#exchange-token-flow
 app.post('/get_access_token', function(request, response, next) {
   PUBLIC_TOKEN = request.body.public_token
-  client.exchangePublicToken(PUBLIC_TOKEN, function(error, tokenResponse) {
+  plaid.exchangePublicToken(PUBLIC_TOKEN, function(error, tokenResponse) {
     if (error != null) {
       prettyPrintResponse(error)
       return response.json({
@@ -78,7 +78,7 @@ app.get('/transactions', function(request, response, next) {
     .subtract(30, 'days')
     .format('YYYY-MM-DD')
   var endDate = moment().format('YYYY-MM-DD')
-  client.getTransactions(
+  plaid.getTransactions(
     ACCESS_TOKEN,
     startDate,
     endDate,
@@ -103,7 +103,7 @@ app.get('/transactions', function(request, response, next) {
 // Retrieve Identity for an Item
 // https://plaid.com/docs/#identity
 app.get('/identity', function(request, response, next) {
-  client.getIdentity(ACCESS_TOKEN, function(error, identityResponse) {
+  plaid.getIdentity(ACCESS_TOKEN, function(error, identityResponse) {
     if (error != null) {
       prettyPrintResponse(error)
       return response.json({
@@ -118,7 +118,7 @@ app.get('/identity', function(request, response, next) {
 // Retrieve real-time Balances for each of an Item's accounts
 // https://plaid.com/docs/#balance
 app.get('/balance', function(request, response, next) {
-  client.getBalance(ACCESS_TOKEN, function(error, balanceResponse) {
+  plaid.getBalance(ACCESS_TOKEN, function(error, balanceResponse) {
     if (error != null) {
       prettyPrintResponse(error)
       return response.json({
@@ -133,7 +133,7 @@ app.get('/balance', function(request, response, next) {
 // Retrieve an Item's accounts
 // https://plaid.com/docs/#accounts
 app.get('/accounts', function(request, response, next) {
-  client.getAccounts(ACCESS_TOKEN, function(error, accountsResponse) {
+  plaid.getAccounts(ACCESS_TOKEN, function(error, accountsResponse) {
     if (error != null) {
       prettyPrintResponse(error)
       return response.json({
@@ -148,7 +148,7 @@ app.get('/accounts', function(request, response, next) {
 // Retrieve ACH or ETF Auth data for an Item's accounts
 // https://plaid.com/docs/#auth
 app.get('/auth', function(request, response, next) {
-  client.getAuth(ACCESS_TOKEN, function(error, authResponse) {
+  plaid.getAuth(ACCESS_TOKEN, function(error, authResponse) {
     if (error != null) {
       prettyPrintResponse(error)
       return response.json({
@@ -185,7 +185,7 @@ app.get('/assets', function(request, response, next) {
       email: 'alice@example.com',
     },
   }
-  client.createAssetReport([ACCESS_TOKEN], daysRequested, options, function(
+  plaid.createAssetReport([ACCESS_TOKEN], daysRequested, options, function(
     error,
     assetReportCreateResponse,
   ) {
@@ -198,7 +198,7 @@ app.get('/assets', function(request, response, next) {
     prettyPrintResponse(assetReportCreateResponse)
 
     var assetReportToken = assetReportCreateResponse.asset_report_token
-    respondWithAssetReport(20, assetReportToken, client, response)
+    respondWithAssetReport(20, assetReportToken, plaid, response)
   })
 })
 
@@ -207,7 +207,7 @@ app.get('/assets', function(request, response, next) {
 app.get('/item', function(request, response, next) {
   // Pull the Item - this includes information about available products,
   // billed products, webhook information, and more.
-  client.getItem(ACCESS_TOKEN, function(error, itemResponse) {
+  plaid.getItem(ACCESS_TOKEN, function(error, itemResponse) {
     if (error != null) {
       prettyPrintResponse(error)
       return response.json({
@@ -215,7 +215,7 @@ app.get('/item', function(request, response, next) {
       })
     }
     // Also pull information about the institution
-    client.getInstitutionById(itemResponse.item.institution_id, function(
+    plaid.getInstitutionById(itemResponse.item.institution_id, function(
       err,
       instRes,
     ) {
@@ -245,13 +245,13 @@ var prettyPrintResponse = (response) => {
 }
 
 // This is a helper function to poll for the completion of an Asset Report and
-// then send it in the response to the client. Alternatively, you can provide a
+// then send it in the response to the plaid. Alternatively, you can provide a
 // webhook in the `options` object in your `/asset_report/create` request to be
 // notified when the Asset Report is finished being generated.
 var respondWithAssetReport = (
   numRetriesRemaining,
   assetReportToken,
-  client,
+  plaid,
   response,
 ) => {
   if (numRetriesRemaining == 0) {
@@ -260,7 +260,7 @@ var respondWithAssetReport = (
     })
   }
 
-  client.getAssetReport(assetReportToken, function(
+  plaid.getAssetReport(assetReportToken, function(
     error,
     assetReportGetResponse,
   ) {
@@ -272,7 +272,7 @@ var respondWithAssetReport = (
             respondWithAssetReport(
               --numRetriesRemaining,
               assetReportToken,
-              client,
+              plaid,
               response,
             ),
           1000,
@@ -285,7 +285,7 @@ var respondWithAssetReport = (
       })
     }
 
-    client.getAssetReportPdf(assetReportToken, function(
+    plaid.getAssetReportPdf(assetReportToken, function(
       error,
       assetReportGetPdfResponse,
     ) {
@@ -306,7 +306,7 @@ var respondWithAssetReport = (
 
 app.post('/set_access_token', function(request, response, next) {
   ACCESS_TOKEN = request.body.access_token
-  client.getItem(ACCESS_TOKEN, function(error, itemResponse) {
+  plaid.getItem(ACCESS_TOKEN, function(error, itemResponse) {
     response.json({
       item_id: itemResponse.item.item_id,
       error: false,

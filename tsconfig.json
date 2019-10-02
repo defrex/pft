@@ -13,10 +13,6 @@
     "noImplicitReturns": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
-    "strictPropertyInitialization": false,
-    "baseUrl": ".",
-    "paths": {
-      "pft/*": ["."]
-    }
+    "strictPropertyInitialization": false
   }
 }

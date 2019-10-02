@@ -1,64 +1,73 @@
 import moment from 'moment'
-import { plaid } from './plaidClient'
+import { Transaction as PlaidTransaction } from 'plaid'
+import { detectTransfers } from './detectTransfers'
+import {
+  getPlaidAccounts,
+  plaid,
+  plaidAccountIds,
+  plaidFiTokens,
+} from './plaid'
 import { Transaction } from './Transaction'
 
 const startDate = moment()
-  .subtract(3, 'months')
+  .subtract(6, 'months')
   .startOf('month')
   .format('YYYY-MM-DD')
 const endDate = moment().format('YYYY-MM-DD')
 
-const plaidAccountTokens = Object.keys(process.env)
-  .filter((key) => key.startsWith(`PLAID_TOKEN`))
-  .map((key) => ({
-    account: key.replace(/^PLAID_TOKEN_/, ''),
-    token: process.env[key]!,
-  }))
-
-export async function fetchTransactions(): Promise<Transaction[]> {
-  const rawTransactions = await Promise.all(
-    plaidAccountTokens.map(({ account, token }) => {
-      return plaid
-        .getTransactions(token, startDate, endDate, {
-          count: 250,
-          offset: 0,
-        })
-        .then(({ transactions }) => ({
-          account,
-          transactions,
-        }))
-    }),
-  )
-
-  // concat all transactions
-  return rawTransactions.reduce(
-    (all, { account, transactions }) =>
-      all.concat(
-        transactions.map(({ name, date, amount, category }) => ({
-          account,
-          name: name ? name : 'Unknown',
-          date: new Date(date),
-          amount: amount ? -amount : 0,
-          category: category ? category : [],
-        })),
+async function fetchTransactionPage(
+  page: number = 0,
+): Promise<PlaidTransaction[]> {
+  console.log(`Fetching transaction page ${page}`)
+  let output: PlaidTransaction[] = []
+  for (const plaidFiToken of plaidFiTokens) {
+    const { transactions } = await plaid.getTransactions(
+      plaidFiToken,
+      startDate,
+      endDate,
+      { count: 500, offset: page * 500 },
+    )
+    output = output.concat(
+      transactions.filter(({ account_id }) =>
+        plaidAccountIds.includes(account_id),
       ),
-    [] as Transaction[],
-  )
+    )
+  }
+  return output
 }
 
-// export async function fetchBalances() {
-//   const rawBalances = await Promise.all(
-//     plaidAccountTokens.map(({ account, token }) => {
-//       return plaid.getBalance(token)
-//     }),
-//   )
+export async function fetchTransactions(): Promise<Transaction[]> {
+  if (plaidAccountIds.length === 0) {
+    console.error(
+      'No accounts selected. Please run `npm run set-plaid-accounts`.',
+    )
+    process.exit()
+  }
 
-//   return rawBalances.reduce((all, { accounts }) => {
-//     return all.concat(
-//       accounts.map(({ name, balances }) => ({
-//         name,
-//         balance: balances.current,
-//       })),
-//     )
-//   }, [])
-// }
+  const plaidAccounts = await getPlaidAccounts()
+
+  let transactions: Transaction[] = []
+  let page = 0
+  while (
+    transactions.length === 0 ||
+    moment(startDate).isBefore(
+      moment(transactions[transactions.length - 1].date),
+    )
+  ) {
+    const plaidTransactions = await fetchTransactionPage(page)
+    transactions = transactions.concat(
+      plaidTransactions.map(({ name, date, amount, category, account_id }) => ({
+        plaidAccountId: account_id,
+        plaidAccount: plaidAccounts[account_id],
+        name: name ? name : 'Unknown',
+        date: moment(date).format('YYYY-MM-DD'),
+        amount: amount ? -amount : 0,
+        category: category ? category : [],
+        isTransfer: false,
+      })),
+    )
+    page++
+  }
+
+  return detectTransfers(transactions)
+}

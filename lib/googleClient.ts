@@ -1,6 +1,6 @@
 import { google } from 'googleapis'
 
-const oAuth2Client = new google.auth.OAuth2(
+export const oAuth2Client = new google.auth.OAuth2(
   process.env.SHEETS_CLIENT_ID,
   process.env.SHEETS_CLIENT_SECRET,
   process.env.SHEETS_REDIRECT_URI,

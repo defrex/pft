@@ -1,7 +1,11 @@
+import { Account } from 'plaid'
+
 export interface Transaction {
-  account: string
+  plaidAccount: Account
+  plaidAccountId: string
   name: string
-  date: Date
+  date: string
   amount: number
   category: string[]
+  isTransfer: boolean
 }
