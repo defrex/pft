@@ -1,13 +1,8 @@
 import moment from 'moment'
-import { Transaction as PlaidTransaction } from 'plaid'
-import { detectTransfers } from './detectTransfers'
-import {
-  getPlaidAccounts,
-  plaid,
-  plaidAccountIds,
-  plaidFiTokens,
-} from './plaid'
-import { Transaction } from './Transaction'
+import { Account as PlaidAccount, Transaction as PlaidTransaction } from 'plaid'
+import { readCache, writeCache } from './cache'
+import { plaid, plaidAccountIds, plaidFiTokens } from './plaid'
+import { TransactionSet } from './TransactionSet'
 
 const startDate = moment()
   .subtract(6, 'months')
@@ -21,22 +16,32 @@ async function fetchTransactionPage(
   console.log(`Fetching transaction page ${page}`)
   let output: PlaidTransaction[] = []
   for (const plaidFiToken of plaidFiTokens) {
-    const { transactions } = await plaid.getTransactions(
+    const data = await readCache<PlaidTransaction[]>(
       plaidFiToken,
       startDate,
       endDate,
-      { count: 500, offset: page * 500 },
+      page,
     )
-    output = output.concat(
-      transactions.filter(({ account_id }) =>
+    if (data) {
+      output = output.concat(data)
+    } else {
+      const result = await plaid.getTransactions(
+        plaidFiToken,
+        startDate,
+        endDate,
+        { count: 500, offset: page * 500 },
+      )
+      const transactions = result.transactions.filter(({ account_id }) =>
         plaidAccountIds.includes(account_id),
-      ),
-    )
+      )
+      await writeCache(plaidFiToken, startDate, endDate, page, transactions)
+      output = output.concat(transactions)
+    }
   }
   return output
 }
 
-export async function fetchTransactions(): Promise<Transaction[]> {
+export async function fetchTransactions(): Promise<TransactionSet> {
   if (plaidAccountIds.length === 0) {
     console.error(
       'No accounts selected. Please run `npm run set-plaid-accounts`.',
@@ -44,30 +49,26 @@ export async function fetchTransactions(): Promise<Transaction[]> {
     process.exit()
   }
 
-  const plaidAccounts = await getPlaidAccounts()
+  const plaidTransactions: PlaidTransaction[] = []
+  const plaidAccounts: PlaidAccount[] = []
 
-  let transactions: Transaction[] = []
+  for (const plaidFiToken of plaidFiTokens) {
+    const { accounts } = await plaid.getAccounts(plaidFiToken)
+    for (const account of accounts) {
+      plaidAccounts.push(account)
+    }
+  }
+
   let page = 0
   while (
-    transactions.length === 0 ||
+    plaidTransactions.length === 0 ||
     moment(startDate).isBefore(
-      moment(transactions[transactions.length - 1].date),
+      moment(plaidTransactions[plaidTransactions.length - 1].date),
     )
   ) {
-    const plaidTransactions = await fetchTransactionPage(page)
-    transactions = transactions.concat(
-      plaidTransactions.map(({ name, date, amount, category, account_id }) => ({
-        plaidAccountId: account_id,
-        plaidAccount: plaidAccounts[account_id],
-        name: name ? name : 'Unknown',
-        date: moment(date).format('YYYY-MM-DD'),
-        amount: amount ? -amount : 0,
-        category: category ? category : [],
-        isTransfer: false,
-      })),
-    )
+    plaidTransactions.push(...(await fetchTransactionPage(page)))
     page++
   }
 
-  return detectTransfers(transactions)
+  return new TransactionSet(plaidTransactions, plaidAccounts)
 }

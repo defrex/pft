@@ -1,4 +1,4 @@
-import { Client, environments, Account } from 'plaid'
+import { Client, environments } from 'plaid'
 
 export const plaidFiTokens: string[] = Object.keys(process.env)
   .filter((key) => key.startsWith('PLAID_TOKEN'))
@@ -17,17 +17,3 @@ export const plaid = new Client(
     version: '2018-05-22',
   },
 )
-
-let plaidAccounts: { [key: string]: Account } | null = null
-export async function getPlaidAccounts(): Promise<{ [key: string]: Account }> {
-  if (plaidAccounts === null) {
-    plaidAccounts = {}
-    for (const plaidFiToken of plaidFiTokens) {
-      const { accounts } = await plaid.getAccounts(plaidFiToken)
-      for (const account of accounts) {
-        plaidAccounts[account.account_id] = account
-      }
-    }
-  }
-  return plaidAccounts
-}
