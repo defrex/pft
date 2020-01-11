@@ -31,8 +31,9 @@ async function fetchTransactionPage(
         endDate,
         { count: 500, offset: page * 500 },
       )
-      const transactions = result.transactions.filter(({ account_id }) =>
-        plaidAccountIds.includes(account_id),
+      const transactions = result.transactions.filter(
+        ({ account_id }: PlaidTransaction) =>
+          plaidAccountIds.includes(account_id),
       )
       await writeCache(plaidFiToken, startDate, endDate, page, transactions)
       output = output.concat(transactions)
@@ -60,12 +61,26 @@ export async function fetchTransactions(): Promise<TransactionSet> {
   }
 
   let page = 0
+  let prevLength = 0
   while (
     plaidTransactions.length === 0 ||
-    moment(startDate).isBefore(
-      moment(plaidTransactions[plaidTransactions.length - 1].date),
-    )
+    (plaidTransactions.length !== prevLength &&
+      moment(startDate).isBefore(
+        moment(plaidTransactions[plaidTransactions.length - 1].date),
+      ))
   ) {
+    if (plaidTransactions.length === 0) {
+      console.log('empty')
+    } else if (plaidTransactions.length !== prevLength) {
+      console.log(plaidTransactions.length, '!==', prevLength)
+    } else {
+      console.log(
+        startDate,
+        'isBefore',
+        plaidTransactions[plaidTransactions.length - 1].date,
+      )
+    }
+    prevLength = plaidTransactions.length
     plaidTransactions.push(...(await fetchTransactionPage(page)))
     page++
   }

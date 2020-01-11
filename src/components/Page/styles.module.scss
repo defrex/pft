@@ -1,0 +1,23 @@
+.header,
+.nav,
+.main,
+.footer {
+  max-width: 1024px;
+  margin: auto;
+}
+
+.header,
+.nav,
+.footer {
+  display: flex;
+  flex-direction: row;
+  padding: 4px 0;
+}
+
+.expand {
+  flex: 1;
+}
+
+.navItem {
+  margin-right: 8px;
+}

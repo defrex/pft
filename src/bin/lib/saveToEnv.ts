@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import dotenv from 'dotenv'
 
-const envPath = path.resolve(__dirname, '../.env')
+const envPath = path.resolve(__dirname, '../../../.env')
 
 export function saveToEnv(vars: { [key: string]: string }) {
   let current: { [key: string]: string }

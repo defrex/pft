@@ -1,5 +1,7 @@
 import { resolve } from 'path'
-import { exists, readFile, writeFile } from 'fs'
+import { exists, readFile, writeFile, mkdir } from 'fs'
+
+const cacheDir = `${__dirname}/../../../.cache/transactions`
 
 export function cacheFilename(
   plaidFiToken: string,
@@ -8,7 +10,7 @@ export function cacheFilename(
   page: number,
 ) {
   return resolve(
-    `${__dirname}/../cache/${plaidFiToken}-${startDate}-${endDate}-${page}.json`,
+    `${cacheDir}/${plaidFiToken}-${startDate}-${endDate}-${page}.json`,
   )
 }
 
@@ -44,12 +46,14 @@ export async function writeCache(
 ): Promise<void> {
   const filename = cacheFilename(plaidFiToken, startDate, endDate, page)
   return new Promise((resolve, reject) => {
-    writeFile(filename, JSON.stringify(data), (err) => {
-      if (err) {
-        reject(err)
-      } else {
-        resolve()
-      }
+    mkdir(cacheDir, { recursive: true }, () => {
+      writeFile(filename, JSON.stringify(data), (err) => {
+        if (err) {
+          reject(err)
+        } else {
+          resolve()
+        }
+      })
     })
   })
 }

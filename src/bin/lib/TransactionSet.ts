@@ -65,54 +65,6 @@ export class TransactionSet {
     return this._months
   }
 
-  findSubscriptions(): TransactionSet {
-    const subscriptions: Transaction[] = []
-    const lastFullMonth = moment()
-      .subtract(1, 'month')
-      .startOf('month')
-    const transactions = this.months.get(lastFullMonth.valueOf())
-    if (!transactions) {
-      console.warn('findSubscriptions: Not enough transactions for month 0 ⚠')
-      return new TransactionSet([], this.accounts)
-    }
-    transactions: for (const transaction of transactions) {
-      if (
-        ['Food and Drink'].includes(transaction.category[0]) ||
-        transaction.isTransfer ||
-        transaction.amount > 0 ||
-        transaction.name.includes('Uber')
-      ) {
-        continue
-      }
-      for (const monthsAgo of [1, 2, 3]) {
-        const month = lastFullMonth.clone().subtract(monthsAgo, 'months')
-        const monthTransactions = this.months.get(month.valueOf())
-        if (!monthTransactions) {
-          console.warn(
-            `findSubscriptions: Not enough transactions for month ${monthsAgo} ⚠`,
-          )
-          return new TransactionSet([], this.accounts)
-        }
-        if (
-          !monthTransactions.some((monthTransaction) => {
-            return (
-              monthTransaction.accountId === transaction.accountId &&
-              monthTransaction.name === transaction.name &&
-              (monthTransaction.amount <
-                transaction.amount - transaction.amount * 0.1 ||
-                monthTransaction.amount >
-                  transaction.amount + transaction.amount * 0.1)
-            )
-          })
-        ) {
-          continue transactions
-        }
-      }
-      subscriptions.push(transaction)
-    }
-    return new TransactionSet(subscriptions, this.accounts)
-  }
-
   account(id: string): PlaidAccount | undefined {
     return this.accounts.find(({ account_id }) => account_id === id)
   }
@@ -129,25 +81,25 @@ export class TransactionSet {
     return this.transactions[this.transactions.length - 1]
   }
 
-  forEach(iterator: (value: Transaction, index: number) => void) {
-    this.transactions.forEach(iterator)
+  map<T>(iterator: (value: Transaction, index: number) => T): T[] {
+    return this.transactions.map(iterator)
   }
 
-  forEachMonth(
-    iterator: (
-      month: Moment,
-      transactions: TransactionSet,
-      index: number,
-    ) => void,
-  ) {
+  mapMonths<T>(
+    iterator: (month: Moment, transactions: TransactionSet, index: number) => T,
+  ): T[] {
     let index = 0
+    const results: T[] = []
     this.months.forEach((transactions, month) => {
-      iterator(
-        moment(month),
-        new TransactionSet(transactions, this.accounts),
-        index,
+      results.push(
+        iterator(
+          moment(month),
+          new TransactionSet(transactions, this.accounts),
+          index,
+        ),
       )
       index++
     })
+    return results
   }
 }

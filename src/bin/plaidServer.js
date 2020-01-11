@@ -6,14 +6,13 @@ if (!account) {
   throw new Error('An account name must be provided.')
 }
 
-const fs = require('fs')
 const util = require('util')
 const path = require('path')
 const moment = require('moment')
 const express = require('express')
 const bodyParser = require('body-parser')
-const { plaid } = require('../lib/plaid')
-const { saveToEnv } = require('../lib/saveToEnv')
+const { plaid } = require('./lib/plaid')
+const { saveToEnv } = require('./lib/saveToEnv')
 
 const app = express()
 app.use(express.static(path.resolve(__dirname)))
@@ -26,7 +25,7 @@ app.use(
 app.use(bodyParser.json())
 
 app.get('/', (req, res, next) => {
-  res.render(path.resolve(__dirname, 'plaid.ejs'), {
+  res.render(path.resolve(__dirname, './lib/plaid.ejs'), {
     PLAID_ACCOUNT: account,
     PLAID_PUBLIC_KEY: process.env.PLAID_PUBLIC_KEY,
   })
